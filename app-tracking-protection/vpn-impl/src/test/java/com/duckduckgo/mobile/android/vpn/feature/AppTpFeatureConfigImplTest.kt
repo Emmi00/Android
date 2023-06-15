@@ -59,7 +59,7 @@ class AppTpFeatureConfigImplTest {
         AppTpSetting.values().forEach { setting ->
             when (setting) {
                 AppTpSetting.PrivateDnsSupport -> assertFalse(config.isEnabled(setting))
-                AppTpSetting.InterceptDnsTraffic -> assertFalse(config.isEnabled(setting))
+                AppTpSetting.InterceptDnsTraffic -> assertTrue(config.isEnabled(setting))
                 AppTpSetting.AlwaysSetDNS -> assertFalse(config.isEnabled(setting))
                 AppTpSetting.CPUMonitoring -> assertFalse(config.isEnabled(setting))
                 AppTpSetting.ProtectGames -> assertFalse(config.isEnabled(setting))
