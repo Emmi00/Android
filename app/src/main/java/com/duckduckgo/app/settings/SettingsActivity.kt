@@ -40,7 +40,6 @@ import com.duckduckgo.app.accessibility.AccessibilityActivity
 import com.duckduckgo.app.browser.BrowserActivity
 import com.duckduckgo.app.browser.R
 import com.duckduckgo.app.browser.databinding.ActivitySettingsBinding
-import com.duckduckgo.app.browser.webview.WebViewActivity
 import com.duckduckgo.app.email.ui.EmailProtectionUnsupportedActivity
 import com.duckduckgo.app.feedback.ui.common.FeedbackActivity
 import com.duckduckgo.app.fire.fireproofwebsite.ui.FireproofWebsitesActivity
@@ -75,6 +74,7 @@ import com.duckduckgo.app.widget.AddWidgetLauncher
 import com.duckduckgo.appbuildconfig.api.AppBuildConfig
 import com.duckduckgo.autoconsent.impl.ui.AutoconsentSettingsActivity
 import com.duckduckgo.autofill.api.AutofillSettingsActivityLauncher
+import com.duckduckgo.browser.api.ui.WebViewActivityWithParams
 import com.duckduckgo.di.scopes.ActivityScope
 import com.duckduckgo.macos.api.MacOsScreenWithEmptyParams
 import com.duckduckgo.mobile.android.app.tracking.ui.AppTrackerActivityWithEmptyParams
@@ -233,11 +233,11 @@ class SettingsActivity : DuckDuckGoActivity() {
             provideFeedback.setClickListener { viewModel.userRequestedToSendFeedback() }
             about.setClickListener { startActivity(AboutDuckDuckGoActivity.intent(this@SettingsActivity)) }
             privacyPolicy.setClickListener {
-                startActivity(
-                    WebViewActivity.intent(
-                        this@SettingsActivity,
-                        PRIVACY_POLICY_WEB_LINK,
-                        getString(R.string.settingsPrivacyPolicyDuckduckgo),
+                globalActivityStarter.start(
+                    this@SettingsActivity,
+                    WebViewActivityWithParams(
+                        url = PRIVACY_POLICY_WEB_LINK,
+                        screenTitle = getString(R.string.settingsPrivacyPolicyDuckduckgo),
                     ),
                 )
             }
