@@ -70,6 +70,9 @@ class NgVpnNetworkStackTest {
             appTrackerDetector,
             trackingProtectionAppsRepository,
             appTpFeatureConfig,
+            object : SystemDnsProvider {
+                override fun getSystemDns(): List<InetAddress> = emptyList()
+            },
         )
     }
 

@@ -28,6 +28,7 @@ import com.duckduckgo.app.global.extensions.isPrivateDnsActive
 import com.duckduckgo.di.scopes.VpnScope
 import com.duckduckgo.mobile.android.vpn.feature.AppTpFeatureConfig
 import com.duckduckgo.mobile.android.vpn.feature.AppTpSetting
+import com.duckduckgo.mobile.android.vpn.network.util.getSystemActiveNetworkDefaultDns
 import com.duckduckgo.mobile.android.vpn.service.TrackerBlockingVpnService
 import com.duckduckgo.mobile.android.vpn.service.VpnServiceCallbacks
 import com.duckduckgo.mobile.android.vpn.state.VpnStateCollectorPlugin
@@ -39,12 +40,14 @@ import dagger.SingleInstanceIn
 import java.net.InetAddress
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import logcat.LogPriority
+import logcat.LogPriority.WARN
 import logcat.asLog
 import logcat.logcat
 import org.json.JSONObject
@@ -66,6 +69,12 @@ class NetworkTypeCollector @Inject constructor(
 
     private val databaseDispatcher = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
     private val adapter = Moshi.Builder().build().adapter(NetworkInfo::class.java)
+
+    private val isPrivateDnsSupportEnabled: Boolean
+        get() = appTpFeatureConfig.isEnabled(AppTpSetting.PrivateDnsSupport)
+
+    private val isInterceptDnsTrafficSupported: Boolean
+        get() = appTpFeatureConfig.isEnabled(AppTpSetting.InterceptDnsTraffic)
 
     private val preferences: SharedPreferences
         get() = context.getHarmonySharedPreferences(FILENAME)
@@ -110,12 +119,16 @@ class NetworkTypeCollector @Inject constructor(
 
     private val privateDnsCallback = object : NetworkCallback() {
         private var privateDnsCacheValue: String? = null
+        private var cachedSystemDns: Set<String>? = null
 
         override fun onLinkPropertiesChanged(network: Network, linkProperties: LinkProperties) {
             super.onLinkPropertiesChanged(network, linkProperties)
 
+            val shouldRestart = AtomicBoolean(false)
+
             // check for Android Private DNS setting
             val privateDnsServerName = context.getPrivateDnsServerName()
+            val systemDnsNames = getSystemActiveNetworkDefaultDns()
             logcat {
                 """
                     isPrivateDnsActive = ${context.isPrivateDnsActive()}, server = ${context.getPrivateDnsServerName()}
@@ -124,15 +137,40 @@ class NetworkTypeCollector @Inject constructor(
             }
 
             // Check if VPN reconfiguration is needed
-            if (appTpFeatureConfig.isEnabled(AppTpSetting.PrivateDnsSupport) && privateDnsCacheValue != privateDnsServerName) {
-                logcat { "Private DNS changed, reconfiguring VPN" }
+            if (isPrivateDnsSupportEnabled && privateDnsCacheValue != privateDnsServerName) {
+                logcat { "Private DNS changed, should reconfigure VPN" }
+                shouldRestart.set(true)
+            } else if (isInterceptDnsTrafficSupported && didSystemDnsChanged(cachedSystemDns, systemDnsNames)) {
+                logcat { "System DNS changed, should reconfigure VPN, old = $cachedSystemDns, new=$systemDnsNames" }
+                shouldRestart.set(true)
+            }
+
+            // update values cached values anyways
+            privateDnsCacheValue = privateDnsServerName
+            cachedSystemDns = systemDnsNames
+            if (shouldRestart.getAndSet(false)) {
+                logcat { "Reconfiguring VPN now" }
                 coroutineScope.launch {
-                    privateDnsCacheValue = privateDnsServerName
                     TrackerBlockingVpnService.restartVpnService(context)
                 }
             } else {
                 logcat { "Nothing change in Network config, skip reconfiguration" }
             }
+        }
+
+        private fun didSystemDnsChanged(oldSystemDns: Set<String>?, newSystemDns: Set<String>): Boolean {
+            if (oldSystemDns == null) return false
+            if (newSystemDns.isEmpty()) {
+                logcat(WARN) { "New system DNSes are set to null" }
+            }
+
+            return newSystemDns.intersect(oldSystemDns).isEmpty()
+        }
+
+        private fun getSystemActiveNetworkDefaultDns(): Set<String> {
+            return kotlin.runCatching {
+                context.getSystemActiveNetworkDefaultDns()
+            }.getOrDefault(emptyList()).toSet()
         }
     }
 

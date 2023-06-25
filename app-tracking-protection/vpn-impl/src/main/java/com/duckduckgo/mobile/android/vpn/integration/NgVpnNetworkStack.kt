@@ -60,6 +60,7 @@ class NgVpnNetworkStack @Inject constructor(
     private val appTrackerDetector: AppTrackerDetector,
     private val trackingProtectionAppsRepository: TrackingProtectionAppsRepository,
     private val appTpFeatureConfig: AppTpFeatureConfig,
+    private val systemDnsProvider: SystemDnsProvider,
 ) : VpnNetworkStack, VpnNetworkCallback {
 
     private var tunnelThread: Thread? = null
@@ -97,10 +98,8 @@ class NgVpnNetworkStack @Inject constructor(
             ),
             dns = mutableSetOf<InetAddress>().apply {
                 if (isInterceptDnsTrafficEnabled) {
-                    logcat { "Adding quad9 DNS for AppTP" }
-                    // Quad9, better DNS privacy and compatible with private DNS
-                    // get all by name to ensure we also get the IPv6 address.
-                    addAll(InetAddress.getAllByName("dns.quad9.net"))
+                    logcat { "Adding System defined DNS" }
+                    addAll(systemDnsProvider.getSystemDns())
                 }
             }.toSet(),
             routes = emptyMap(),

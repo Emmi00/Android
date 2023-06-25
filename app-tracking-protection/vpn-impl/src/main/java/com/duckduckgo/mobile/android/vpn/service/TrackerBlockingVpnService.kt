@@ -512,8 +512,7 @@ class TrackerBlockingVpnService : VpnService(), CoroutineScope by MainScope(), V
 
         if (!dns.containsIpv4()) {
             // never allow IPv6-only DNS
-            logcat { "VPN log: No IPv4 DNS found, return empty DNS list" }
-            return setOf()
+            logcat(WARN) { "VPN log: No IPv4 DNS found" }
         }
 
         return dns.toSet()
