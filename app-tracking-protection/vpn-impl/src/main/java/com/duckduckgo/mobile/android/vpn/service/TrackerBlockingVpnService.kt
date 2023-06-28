@@ -360,7 +360,7 @@ class TrackerBlockingVpnService : VpnService(), CoroutineScope by MainScope(), V
                 allowFamily(AF_INET6)
             }
 
-            val systemDnsList = getSystemDns()
+            val dnsToConfigure = checkAndReturnDns(tunnelConfig.dns)
 
             // TODO: eventually routes will be set by remote config
             if (appBuildConfig.isPerformanceTest && appBuildConfig.isInternalBuild()) {
@@ -385,7 +385,7 @@ class TrackerBlockingVpnService : VpnService(), CoroutineScope by MainScope(), V
                 }
 
                 // we need to make sure that all System DNS traffic goes through the VPN. Specifically when the DNS server is on the local network
-                systemDnsList.filterIsInstance<Inet4Address>().forEach { addr ->
+                dnsToConfigure.filterIsInstance<Inet4Address>().forEach { addr ->
                     addr.asRoute()?.let {
                         logcat { "VPN log: Adding DNS address $it to VPN routes" }
                         vpnRoutes.add(it.address to it.maskWidth)
@@ -422,7 +422,7 @@ class TrackerBlockingVpnService : VpnService(), CoroutineScope by MainScope(), V
             configureMeteredConnection()
 
             // Set DNS
-            (systemDnsList + tunnelConfig.dns)
+            dnsToConfigure
                 .filter { (it is Inet4Address) || (tunHasIpv6Address && it is Inet6Address) }
                 .forEach { addr ->
                     logcat { "VPN log: Adding DNS $addr" }
@@ -461,7 +461,7 @@ class TrackerBlockingVpnService : VpnService(), CoroutineScope by MainScope(), V
     /**
      * @return the DNS configured in the Android System
      */
-    private fun getSystemDns(): Set<InetAddress> {
+    private fun checkAndReturnDns(originalDns: Set<InetAddress>): Set<InetAddress> {
         // private extension function, this is purposely here to limit visibility
         fun Set<InetAddress>.containsIpv4(): Boolean {
             forEach {
@@ -470,7 +470,9 @@ class TrackerBlockingVpnService : VpnService(), CoroutineScope by MainScope(), V
             return false
         }
 
-        val dns = mutableSetOf<InetAddress>()
+        val dns = mutableSetOf<InetAddress>().apply {
+            addAll(originalDns)
+        }
 
         // This is purely internal, never to go to production
         if (appBuildConfig.isInternalBuild() && isAlwaysSetDNSEnabled) {
@@ -483,17 +485,6 @@ class TrackerBlockingVpnService : VpnService(), CoroutineScope by MainScope(), V
                     dns.add(InetAddress.getByName("2606:4700:4700::1001"))
                 }.onFailure {
                     logcat(WARN) { "VPN log: Error adding fallback DNS: ${it.asLog()}" }
-                }
-            }
-
-            // always add ipv4 DNS
-            if (!dns.containsIpv4()) {
-                logcat { "VPN log: DNS set does not contain IPv4, adding cloudflare" }
-                kotlin.runCatching {
-                    dns.add(InetAddress.getByName("1.1.1.1"))
-                    dns.add(InetAddress.getByName("1.0.0.1"))
-                }.onFailure {
-                    logcat(WARN) { "VPN log: Error adding fallback DNS ${it.asLog()}" }
                 }
             }
         }

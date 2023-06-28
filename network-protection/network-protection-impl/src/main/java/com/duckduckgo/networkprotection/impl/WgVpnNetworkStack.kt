@@ -100,8 +100,10 @@ class WgVpnNetworkStack @Inject constructor(
                 VpnTunnelConfig(
                     mtu = netPDefaultConfigProvider.mtu(),
                     addresses = wgTunnelData?.tunnelAddress ?: emptyMap(),
-                    // when Android private DNS are set we're force to use them otherwise Android will kill connectivity for that network interface
-                    dns = if (privateDns.isEmpty()) wgTunnelData!!.allDns() else privateDns.toSet(),
+                    // when Android private DNS are set, we return DO NOT configure any DNS.
+                    // why? no use intercepting encrypted DNS traffic, plus we can't configure any DNS that doesn't support DoT, otherwise Android
+                    // will enforce DoT and will stop passing any DNS traffic, resulting in no DNS resolution == connectivity is killed
+                    dns = if (privateDns.isEmpty()) wgTunnelData!!.allDns() else emptySet(),
                     routes = netPDefaultConfigProvider.routes(),
                     appExclusionList = netPDefaultConfigProvider.exclusionList(),
                 ),
