@@ -29,8 +29,6 @@ import android.os.*
 import android.system.OsConstants.AF_INET6
 import androidx.core.content.ContextCompat
 import com.duckduckgo.anvil.annotations.InjectWith
-import com.duckduckgo.app.global.extensions.getPrivateDnsServerName
-import com.duckduckgo.app.global.extensions.isPrivateDnsActive
 import com.duckduckgo.app.global.plugins.PluginPoint
 import com.duckduckgo.app.utils.ConflatedJob
 import com.duckduckgo.app.utils.checkMainThread
@@ -137,9 +135,6 @@ class TrackerBlockingVpnService : VpnService(), CoroutineScope by MainScope(), V
     private val alwaysOnStateJob = ConflatedJob()
 
     private val serviceDispatcher = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
-
-    private val isPrivateDnsSupportEnabled: Boolean
-        get() = appTpFeatureConfig.isEnabled(AppTpSetting.PrivateDnsSupport)
 
     private val isAlwaysSetDNSEnabled: Boolean
         get() = appTpFeatureConfig.isEnabled(AppTpSetting.AlwaysSetDNS)
@@ -476,13 +471,6 @@ class TrackerBlockingVpnService : VpnService(), CoroutineScope by MainScope(), V
         }
 
         val dns = mutableSetOf<InetAddress>()
-
-        // Android Private DNS (added by the user)
-        if (isPrivateDnsSupportEnabled && this.isPrivateDnsActive()) {
-            runCatching {
-                InetAddress.getAllByName(applicationContext.getPrivateDnsServerName())
-            }.getOrNull()?.run { dns.addAll(this) }
-        }
 
         // This is purely internal, never to go to production
         if (appBuildConfig.isInternalBuild() && isAlwaysSetDNSEnabled) {
