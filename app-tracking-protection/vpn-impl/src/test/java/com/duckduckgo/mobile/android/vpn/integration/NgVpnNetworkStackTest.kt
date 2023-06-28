@@ -23,6 +23,7 @@ import com.duckduckgo.mobile.android.app.tracking.AppTrackerDetector
 import com.duckduckgo.mobile.android.vpn.apps.TrackingProtectionAppsRepository
 import com.duckduckgo.mobile.android.vpn.feature.AppTpFeatureConfig
 import com.duckduckgo.mobile.android.vpn.feature.FakeAppTpFeatureConfig
+import com.duckduckgo.mobile.android.vpn.network.FakeDnsProvider
 import com.duckduckgo.vpn.network.api.*
 import com.duckduckgo.vpn.network.api.AddressRR
 import com.duckduckgo.vpn.network.api.DnsRR
@@ -70,9 +71,7 @@ class NgVpnNetworkStackTest {
             appTrackerDetector,
             trackingProtectionAppsRepository,
             appTpFeatureConfig,
-            object : SystemDnsProvider {
-                override fun getSystemDns(): List<InetAddress> = emptyList()
-            },
+            FakeDnsProvider(),
         )
     }
 

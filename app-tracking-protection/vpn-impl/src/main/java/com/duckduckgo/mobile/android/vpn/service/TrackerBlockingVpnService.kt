@@ -375,19 +375,11 @@ class TrackerBlockingVpnService : VpnService(), CoroutineScope by MainScope(), V
                     .map { it.key to it.value }
                     .ifEmpty { VpnRoutes.includedRoutes.asAddressMaskPair() }.toMutableList()
 
-                // Any DNS that comes from the tunnel config shall be added to the routes
+                // Any DNS shall be added to the routes, to ensure its traffic goes through the VPN, specifically because we can have local DNSes
                 // TODO filtering Ipv6 out for now for simplicity. Once we support IPv6 we'll come back to this
-                tunnelConfig.dns.filterIsInstance<Inet4Address>().forEach { dns ->
+                dnsToConfigure.filterIsInstance<Inet4Address>().forEach { dns ->
                     dns.asRoute()?.let {
                         logcat { "VPN log: Adding tunnel config DNS address $it to VPN routes" }
-                        vpnRoutes.add(it.address to it.maskWidth)
-                    }
-                }
-
-                // we need to make sure that all System DNS traffic goes through the VPN. Specifically when the DNS server is on the local network
-                dnsToConfigure.filterIsInstance<Inet4Address>().forEach { addr ->
-                    addr.asRoute()?.let {
-                        logcat { "VPN log: Adding DNS address $it to VPN routes" }
                         vpnRoutes.add(it.address to it.maskWidth)
                     }
                 }

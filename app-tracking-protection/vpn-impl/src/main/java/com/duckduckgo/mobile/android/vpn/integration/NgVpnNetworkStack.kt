@@ -26,6 +26,7 @@ import com.duckduckgo.mobile.android.vpn.AppTpVpnFeature
 import com.duckduckgo.mobile.android.vpn.apps.TrackingProtectionAppsRepository
 import com.duckduckgo.mobile.android.vpn.feature.AppTpFeatureConfig
 import com.duckduckgo.mobile.android.vpn.feature.AppTpSetting
+import com.duckduckgo.mobile.android.vpn.network.DnsProvider
 import com.duckduckgo.mobile.android.vpn.network.VpnNetworkStack
 import com.duckduckgo.mobile.android.vpn.network.VpnNetworkStack.VpnTunnelConfig
 import com.duckduckgo.mobile.android.vpn.state.VpnStateMonitor.VpnStopReason
@@ -60,7 +61,7 @@ class NgVpnNetworkStack @Inject constructor(
     private val appTrackerDetector: AppTrackerDetector,
     private val trackingProtectionAppsRepository: TrackingProtectionAppsRepository,
     private val appTpFeatureConfig: AppTpFeatureConfig,
-    private val systemDnsProvider: SystemDnsProvider,
+    private val dnsProvider: DnsProvider,
 ) : VpnNetworkStack, VpnNetworkCallback {
 
     private var tunnelThread: Thread? = null
@@ -97,9 +98,9 @@ class NgVpnNetworkStack @Inject constructor(
                 InetAddress.getByName("fd00:1:fd00:1:fd00:1:fd00:1") to 128, // Add IPv6 Unique Local Address
             ),
             dns = mutableSetOf<InetAddress>().apply {
-                if (isInterceptDnsTrafficEnabled) {
+                if (isInterceptDnsTrafficEnabled && dnsProvider.getPrivateDns().isEmpty()) {
                     logcat { "Adding System defined DNS" }
-                    addAll(systemDnsProvider.getSystemDns())
+                    addAll(dnsProvider.getSystemDns())
                 }
             }.toSet(),
             routes = emptyMap(),

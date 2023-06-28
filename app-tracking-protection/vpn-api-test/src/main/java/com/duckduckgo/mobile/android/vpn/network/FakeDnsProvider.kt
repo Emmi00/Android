@@ -14,22 +14,14 @@
  * limitations under the License.
  */
 
-package com.duckduckgo.networkprotection.impl
+package com.duckduckgo.mobile.android.vpn.network
 
-import android.content.Context
-import com.duckduckgo.app.global.extensions.getPrivateDnsServerName
 import java.net.InetAddress
 
-interface PrivateDnsProvider {
-    fun getPrivateDns(): List<InetAddress>
-}
+class FakeDnsProvider : DnsProvider {
+    val mutableSystemDns = mutableListOf<InetAddress>()
+    val mutablePrivateDns = mutableListOf<InetAddress>()
+    override fun getSystemDns(): List<InetAddress> = mutableSystemDns
 
-internal class PrivateDnsProviderImpl constructor(
-    private val context: Context,
-) : PrivateDnsProvider {
-    override fun getPrivateDns(): List<InetAddress> {
-        return runCatching {
-            context.getPrivateDnsServerName()?.let { InetAddress.getAllByName(it).toList() } ?: emptyList()
-        }.getOrDefault(emptyList())
-    }
+    override fun getPrivateDns(): List<InetAddress> = mutablePrivateDns
 }

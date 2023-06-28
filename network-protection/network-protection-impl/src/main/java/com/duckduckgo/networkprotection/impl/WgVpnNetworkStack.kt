@@ -16,9 +16,9 @@
 
 package com.duckduckgo.networkprotection.impl
 
-import android.content.Context
 import android.os.ParcelFileDescriptor
 import com.duckduckgo.di.scopes.VpnScope
+import com.duckduckgo.mobile.android.vpn.network.DnsProvider
 import com.duckduckgo.mobile.android.vpn.network.VpnNetworkStack
 import com.duckduckgo.mobile.android.vpn.network.VpnNetworkStack.VpnTunnelConfig
 import com.duckduckgo.mobile.android.vpn.state.VpnStateMonitor.VpnStopReason
@@ -32,14 +32,10 @@ import com.duckduckgo.networkprotection.store.NetworkProtectionRepository
 import com.duckduckgo.networkprotection.store.NetworkProtectionRepository.ClientInterface
 import com.duckduckgo.networkprotection.store.NetworkProtectionRepository.ServerDetails
 import com.squareup.anvil.annotations.ContributesMultibinding
-import com.squareup.anvil.annotations.ContributesTo
 import dagger.Lazy
-import dagger.Module
-import dagger.Provides
 import dagger.SingleInstanceIn
 import java.net.InetAddress
 import javax.inject.Inject
-import javax.inject.Qualifier
 import logcat.LogPriority
 import logcat.asLog
 import logcat.logcat
@@ -56,7 +52,7 @@ class WgVpnNetworkStack @Inject constructor(
     private val currentTimeProvider: CurrentTimeProvider,
     private val netpPixels: Lazy<NetworkProtectionPixels>,
     private val netPDefaultConfigProvider: NetPDefaultConfigProvider,
-    @InternalApi private val privateDnsProvider: PrivateDnsProvider,
+    private val dnsProvider: DnsProvider,
 ) : VpnNetworkStack {
     private var wgTunnelData: WgTunnelData? = null
 
@@ -95,7 +91,7 @@ class WgVpnNetworkStack @Inject constructor(
                 )
             }
 
-            val privateDns = privateDnsProvider.getPrivateDns()
+            val privateDns = dnsProvider.getPrivateDns()
             Result.success(
                 VpnTunnelConfig(
                     mtu = netPDefaultConfigProvider.mtu(),
@@ -175,20 +171,5 @@ class WgVpnNetworkStack @Inject constructor(
             networkProtectionRepository.get().enabledTimeInMillis = -1
         }
         return Result.success(Unit)
-    }
-}
-
-@Retention(AnnotationRetention.BINARY)
-@Qualifier
-private annotation class InternalApi
-
-@ContributesTo(VpnScope::class)
-@Module
-object PrivateDnsProviderModule {
-
-    @Provides
-    @InternalApi
-    fun providePrivateDnsProvider(context: Context): PrivateDnsProvider {
-        return PrivateDnsProviderImpl(context)
     }
 }

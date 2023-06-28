@@ -117,7 +117,7 @@ class NetworkTypeCollector @Inject constructor(
         }
     }
 
-    private val privateDnsCallback = object : NetworkCallback() {
+    private val dnsChangeCallback = object : NetworkCallback() {
         private var privateDnsCacheValue: String? = null
         private var cachedSystemDns: Set<String>? = null
 
@@ -184,7 +184,7 @@ class NetworkTypeCollector @Inject constructor(
         (context.applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager?)?.let {
             it.safeRegisterNetworkCallback(wifiNetworkRequest, wifiNetworkCallback)
             it.safeRegisterNetworkCallback(cellularNetworkRequest, cellularNetworkCallback)
-            it.safeRegisterNetworkCallback(privateDnsRequest, privateDnsCallback)
+            it.safeRegisterNetworkCallback(privateDnsRequest, dnsChangeCallback)
         }
     }
 
@@ -195,7 +195,7 @@ class NetworkTypeCollector @Inject constructor(
         (context.applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager?)?.let {
             it.safeUnregisterNetworkCallback(wifiNetworkCallback)
             it.safeUnregisterNetworkCallback(cellularNetworkCallback)
-            it.safeUnregisterNetworkCallback(privateDnsCallback)
+            it.safeUnregisterNetworkCallback(dnsChangeCallback)
         }
     }
 

@@ -17,6 +17,7 @@
 package com.duckduckgo.networkprotection.impl
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.duckduckgo.mobile.android.vpn.network.FakeDnsProvider
 import com.duckduckgo.mobile.android.vpn.state.VpnStateMonitor.VpnStopReason.RESTART
 import com.duckduckgo.mobile.android.vpn.state.VpnStateMonitor.VpnStopReason.SELF_STOP
 import com.duckduckgo.networkprotection.impl.config.NetPDefaultConfigProvider
@@ -58,7 +59,7 @@ class WgVpnNetworkStackTest {
 
     private lateinit var wgTunnelData: WgTunnelData
 
-    private lateinit var privateDnsProvider: FakePrivateDnsProvider
+    private lateinit var privateDnsProvider: FakeDnsProvider
 
     private val netPDefaultConfigProvider = object : NetPDefaultConfigProvider {
         override fun fallbackDns(): Set<InetAddress> {
@@ -80,7 +81,7 @@ class WgVpnNetworkStackTest {
     fun setUp() {
         MockitoAnnotations.openMocks(this)
 
-        privateDnsProvider = FakePrivateDnsProvider()
+        privateDnsProvider = FakeDnsProvider()
 
         wgTunnelData = WgTunnelData(
             serverName = "euw.1",
@@ -242,9 +243,4 @@ class WgVpnNetworkStackTest {
 
         assertTrue(wgVpnNetworkStack.onStartVpn(mock()).isSuccess)
     }
-}
-
-private class FakePrivateDnsProvider : PrivateDnsProvider {
-    val mutablePrivateDns = mutableListOf<InetAddress>()
-    override fun getPrivateDns(): List<InetAddress> = mutablePrivateDns
 }
