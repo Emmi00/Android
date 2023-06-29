@@ -68,8 +68,8 @@ class NgVpnNetworkStack @Inject constructor(
     private var jniContext = 0L
     private val jniLock = Any()
     private val addressLookupLruCache = LruCache<String, String>(LRU_CACHE_SIZE)
-    private val isInterceptDnsTrafficEnabled: Boolean
-        get() = appTpFeatureConfig.isEnabled(AppTpSetting.InterceptDnsTraffic)
+    private val isInterceptDnsRequestsEnabled: Boolean
+        get() = appTpFeatureConfig.isEnabled(AppTpSetting.InterceptDnsRequests)
 
     override val name: String = AppTpVpnFeature.APPTP_VPN.featureName
 
@@ -98,7 +98,7 @@ class NgVpnNetworkStack @Inject constructor(
                 InetAddress.getByName("fd00:1:fd00:1:fd00:1:fd00:1") to 128, // Add IPv6 Unique Local Address
             ),
             dns = mutableSetOf<InetAddress>().apply {
-                if (isInterceptDnsTrafficEnabled && dnsProvider.getPrivateDns().isEmpty()) {
+                if (isInterceptDnsRequestsEnabled && dnsProvider.getPrivateDns().isEmpty()) {
                     logcat { "Adding System defined DNS" }
                     addAll(dnsProvider.getSystemDns())
                 }

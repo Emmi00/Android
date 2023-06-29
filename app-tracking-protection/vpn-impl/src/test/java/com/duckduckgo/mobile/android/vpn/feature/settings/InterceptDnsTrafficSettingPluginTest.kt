@@ -53,7 +53,7 @@ class InterceptDnsTrafficSettingPluginTest {
         val result = featureConfig.store(featureConfig.settingName, jsonEnabled)
 
         assertTrue(result)
-        assertTrue(appTpFeatureConfig.isEnabled(AppTpSetting.InterceptDnsTraffic))
+        assertTrue(appTpFeatureConfig.isEnabled(AppTpSetting.InterceptDnsRequests))
     }
 
     @Test
@@ -61,7 +61,7 @@ class InterceptDnsTrafficSettingPluginTest {
         val result = featureConfig.store(featureConfig.settingName, jsonDisabled)
 
         assertTrue(result)
-        assertFalse(appTpFeatureConfig.isEnabled(AppTpSetting.InterceptDnsTraffic))
+        assertFalse(appTpFeatureConfig.isEnabled(AppTpSetting.InterceptDnsRequests))
     }
 
     @Test
@@ -70,6 +70,6 @@ class InterceptDnsTrafficSettingPluginTest {
         val result = featureConfig.store(settingName, jsonEnabled)
 
         assertFalse(result)
-        assertTrue(appTpFeatureConfig.isEnabled(AppTpSetting.InterceptDnsTraffic))
+        assertTrue(appTpFeatureConfig.isEnabled(AppTpSetting.InterceptDnsRequests))
     }
 }

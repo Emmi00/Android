@@ -72,8 +72,8 @@ class NetworkTypeCollector @Inject constructor(
     private val isPrivateDnsSupportEnabled: Boolean
         get() = appTpFeatureConfig.isEnabled(AppTpSetting.PrivateDnsSupport)
 
-    private val isInterceptDnsTrafficSupported: Boolean
-        get() = appTpFeatureConfig.isEnabled(AppTpSetting.InterceptDnsTraffic)
+    private val isInterceptDnsRequestsSupported: Boolean
+        get() = appTpFeatureConfig.isEnabled(AppTpSetting.InterceptDnsRequests)
 
     private val preferences: SharedPreferences
         get() = context.getHarmonySharedPreferences(FILENAME)
@@ -143,7 +143,7 @@ class NetworkTypeCollector @Inject constructor(
             if (isPrivateDnsSupportEnabled && privateDnsCacheValue != privateDnsServerName) {
                 logcat { "Private DNS changed, should reconfigure VPN" }
                 shouldRestart.set(true)
-            } else if (isInterceptDnsTrafficSupported && didSystemDnsChanged(cachedSystemDns, systemDnsNames)) {
+            } else if (isInterceptDnsRequestsSupported && didSystemDnsChanged(cachedSystemDns, systemDnsNames)) {
                 logcat { "System DNS changed, should reconfigure VPN, old = $cachedSystemDns, new=$systemDnsNames" }
                 shouldRestart.set(true)
             }
