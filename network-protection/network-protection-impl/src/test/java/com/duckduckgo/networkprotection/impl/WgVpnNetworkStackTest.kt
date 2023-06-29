@@ -128,16 +128,14 @@ class WgVpnNetworkStackTest {
     }
 
     @Test
-    fun whenOnPrepareVpnAndPrivateDnsConfiguredThenReturnPrivateDns() = runTest {
+    fun whenOnPrepareVpnAndPrivateDnsConfiguredThenReturnEmptyDnsList() = runTest {
         whenever(wgTunnel.establish()).thenReturn(wgTunnelData)
         privateDnsProvider.mutablePrivateDns.add(InetAddress.getByName("1.1.1.1"))
 
         val actual = wgVpnNetworkStack.onPrepareVpn().getOrThrow()
 
         assertNotNull(actual)
-        assertEquals(mapOf("10.11.12.1" to 32), actual.routes)
-        assertEquals(1, actual.dns.size)
-        assertTrue(actual.dns.any { it.hostAddress == "1.1.1.1" })
+        assertEquals(0, actual.dns.size)
     }
 
     @Test

@@ -28,7 +28,6 @@ import com.duckduckgo.app.global.extensions.isPrivateDnsActive
 import com.duckduckgo.di.scopes.VpnScope
 import com.duckduckgo.mobile.android.vpn.feature.AppTpFeatureConfig
 import com.duckduckgo.mobile.android.vpn.feature.AppTpSetting
-import com.duckduckgo.mobile.android.vpn.network.util.getSystemActiveNetworkDefaultDns
 import com.duckduckgo.mobile.android.vpn.service.TrackerBlockingVpnService
 import com.duckduckgo.mobile.android.vpn.service.VpnServiceCallbacks
 import com.duckduckgo.mobile.android.vpn.state.VpnStateCollectorPlugin
@@ -128,7 +127,11 @@ class NetworkTypeCollector @Inject constructor(
 
             // check for Android Private DNS setting
             val privateDnsServerName = context.getPrivateDnsServerName()
-            val systemDnsNames = getSystemActiveNetworkDefaultDns()
+            // From onLinkPropertiesChanged documentation:
+            // Do NOT call ConnectivityManager.getNetworkCapabilities(android.net.Network) or other synchronous ConnectivityManager methods in this
+            // callback as this is prone to race conditions : calling these methods while in a callback may return an outdated or even a null object.
+            // That's why we use the linkProperties instead of context.getSystemActiveNetworkDefaultDns()
+            val systemDnsNames = linkProperties.getDnsServersHostAddresses()
             logcat {
                 """
                     isPrivateDnsActive = ${context.isPrivateDnsActive()}, server = ${context.getPrivateDnsServerName()}
@@ -147,7 +150,8 @@ class NetworkTypeCollector @Inject constructor(
 
             // update values cached values anyways
             privateDnsCacheValue = privateDnsServerName
-            cachedSystemDns = systemDnsNames
+            val oldNewDnsIntersection = cachedSystemDns?.intersect(systemDnsNames).orEmpty()
+            cachedSystemDns = oldNewDnsIntersection.ifEmpty { systemDnsNames }
             if (shouldRestart.getAndSet(false)) {
                 logcat { "Reconfiguring VPN now" }
                 coroutineScope.launch {
@@ -167,10 +171,17 @@ class NetworkTypeCollector @Inject constructor(
             return newSystemDns.intersect(oldSystemDns).isEmpty()
         }
 
-        private fun getSystemActiveNetworkDefaultDns(): Set<String> {
-            return kotlin.runCatching {
-                context.getSystemActiveNetworkDefaultDns()
-            }.getOrDefault(emptyList()).toSet()
+        private fun LinkProperties.getDnsServersHostAddresses(): Set<String> {
+            val dnsList = mutableSetOf<String>()
+
+            kotlin.runCatching {
+                this.dnsServers.forEach {
+                    it.hostAddress?.let {
+                        dnsList.add(it)
+                    }
+                }
+            }
+            return dnsList
         }
     }
 
