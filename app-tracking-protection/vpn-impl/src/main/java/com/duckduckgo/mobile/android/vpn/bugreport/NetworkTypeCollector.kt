@@ -46,7 +46,6 @@ import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import logcat.LogPriority
-import logcat.LogPriority.WARN
 import logcat.asLog
 import logcat.logcat
 import org.json.JSONObject
@@ -72,9 +71,6 @@ class NetworkTypeCollector @Inject constructor(
     private val isPrivateDnsSupportEnabled: Boolean
         get() = appTpFeatureConfig.isEnabled(AppTpSetting.PrivateDnsSupport)
 
-    private val isInterceptDnsRequestsSupported: Boolean
-        get() = appTpFeatureConfig.isEnabled(AppTpSetting.InterceptDnsRequests)
-
     private val preferences: SharedPreferences
         get() = context.getHarmonySharedPreferences(FILENAME)
 
@@ -95,10 +91,14 @@ class NetworkTypeCollector @Inject constructor(
     private val wifiNetworkCallback = object : NetworkCallback() {
         override fun onAvailable(network: Network) {
             updateNetworkInfo(Connection(network.networkHandle, NetworkType.WIFI, NetworkState.AVAILABLE))
+            logcat { "WIFI available" }
+            TrackerBlockingVpnService.restartIfDefaultNetworkChanged(context)
         }
 
         override fun onLost(network: Network) {
             updateNetworkInfo(Connection(network.networkHandle, NetworkType.WIFI, NetworkState.LOST))
+            logcat { "WIFI lost" }
+            TrackerBlockingVpnService.restartIfDefaultNetworkChanged(context)
         }
     }
 
@@ -107,31 +107,31 @@ class NetworkTypeCollector @Inject constructor(
             updateNetworkInfo(
                 Connection(network.networkHandle, NetworkType.CELLULAR, NetworkState.AVAILABLE, context.mobileNetworkCode(NetworkType.CELLULAR)),
             )
+            logcat { "CELL available" }
+            TrackerBlockingVpnService.restartIfDefaultNetworkChanged(context)
         }
 
         override fun onLost(network: Network) {
             updateNetworkInfo(
                 Connection(network.networkHandle, NetworkType.CELLULAR, NetworkState.LOST, context.mobileNetworkCode(NetworkType.CELLULAR)),
             )
+            logcat { "CELL lost" }
+            TrackerBlockingVpnService.restartIfDefaultNetworkChanged(context)
         }
     }
 
-    private val dnsChangeCallback = object : NetworkCallback() {
+    private val linkPropertiesChangeAndPrivateDnsCallback = object : NetworkCallback() {
         private var privateDnsCacheValue: String? = null
-        private var cachedSystemDns: Set<String>? = null
 
         override fun onLinkPropertiesChanged(network: Network, linkProperties: LinkProperties) {
             super.onLinkPropertiesChanged(network, linkProperties)
+            logcat { "onLinkPropertiesChanged: $linkProperties" }
+            logcat { "network: $network" }
 
             val shouldRestart = AtomicBoolean(false)
 
             // check for Android Private DNS setting
             val privateDnsServerName = context.getPrivateDnsServerName()
-            // From onLinkPropertiesChanged documentation:
-            // Do NOT call ConnectivityManager.getNetworkCapabilities(android.net.Network) or other synchronous ConnectivityManager methods in this
-            // callback as this is prone to race conditions : calling these methods while in a callback may return an outdated or even a null object.
-            // That's why we use the linkProperties instead of context.getSystemActiveNetworkDefaultDns()
-            val systemDnsNames = linkProperties.getDnsServersHostAddresses()
             logcat {
                 """
                     isPrivateDnsActive = ${context.isPrivateDnsActive()}, server = ${context.getPrivateDnsServerName()}
@@ -143,45 +143,16 @@ class NetworkTypeCollector @Inject constructor(
             if (isPrivateDnsSupportEnabled && privateDnsCacheValue != privateDnsServerName) {
                 logcat { "Private DNS changed, should reconfigure VPN" }
                 shouldRestart.set(true)
-            } else if (isInterceptDnsRequestsSupported && didSystemDnsChanged(cachedSystemDns, systemDnsNames)) {
-                logcat { "System DNS changed, should reconfigure VPN, old = $cachedSystemDns, new=$systemDnsNames" }
-                shouldRestart.set(true)
             }
 
             // update values cached values anyways
             privateDnsCacheValue = privateDnsServerName
-            val oldNewDnsIntersection = cachedSystemDns?.intersect(systemDnsNames).orEmpty()
-            cachedSystemDns = oldNewDnsIntersection.ifEmpty { systemDnsNames }
             if (shouldRestart.getAndSet(false)) {
                 logcat { "Reconfiguring VPN now" }
                 coroutineScope.launch {
                     TrackerBlockingVpnService.restartVpnService(context)
                 }
-            } else {
-                logcat { "Nothing change in Network config, skip reconfiguration" }
             }
-        }
-
-        private fun didSystemDnsChanged(oldSystemDns: Set<String>?, newSystemDns: Set<String>): Boolean {
-            if (oldSystemDns == null) return false
-            if (newSystemDns.isEmpty()) {
-                logcat(WARN) { "New system DNSes are set to null" }
-            }
-
-            return newSystemDns.intersect(oldSystemDns).isEmpty()
-        }
-
-        private fun LinkProperties.getDnsServersHostAddresses(): Set<String> {
-            val dnsList = mutableSetOf<String>()
-
-            kotlin.runCatching {
-                this.dnsServers.forEach {
-                    it.hostAddress?.let {
-                        dnsList.add(it)
-                    }
-                }
-            }
-            return dnsList
         }
     }
 
@@ -195,7 +166,7 @@ class NetworkTypeCollector @Inject constructor(
         (context.applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager?)?.let {
             it.safeRegisterNetworkCallback(wifiNetworkRequest, wifiNetworkCallback)
             it.safeRegisterNetworkCallback(cellularNetworkRequest, cellularNetworkCallback)
-            it.safeRegisterNetworkCallback(privateDnsRequest, dnsChangeCallback)
+            it.safeRegisterNetworkCallback(privateDnsRequest, linkPropertiesChangeAndPrivateDnsCallback)
         }
     }
 
@@ -206,7 +177,7 @@ class NetworkTypeCollector @Inject constructor(
         (context.applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager?)?.let {
             it.safeUnregisterNetworkCallback(wifiNetworkCallback)
             it.safeUnregisterNetworkCallback(cellularNetworkCallback)
-            it.safeUnregisterNetworkCallback(dnsChangeCallback)
+            it.safeUnregisterNetworkCallback(linkPropertiesChangeAndPrivateDnsCallback)
         }
     }
 

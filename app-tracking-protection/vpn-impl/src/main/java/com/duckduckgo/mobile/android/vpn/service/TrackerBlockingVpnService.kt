@@ -36,6 +36,7 @@ import com.duckduckgo.appbuildconfig.api.AppBuildConfig
 import com.duckduckgo.appbuildconfig.api.isInternalBuild
 import com.duckduckgo.di.scopes.VpnScope
 import com.duckduckgo.library.loader.LibraryLoader
+import com.duckduckgo.mobile.android.vpn.VpnFeaturesRegistry
 import com.duckduckgo.mobile.android.vpn.dao.VpnServiceStateStatsDao
 import com.duckduckgo.mobile.android.vpn.feature.AppTpFeatureConfig
 import com.duckduckgo.mobile.android.vpn.feature.AppTpSetting
@@ -49,6 +50,7 @@ import com.duckduckgo.mobile.android.vpn.model.VpnStoppingReason
 import com.duckduckgo.mobile.android.vpn.network.VpnNetworkStack
 import com.duckduckgo.mobile.android.vpn.network.VpnNetworkStack.VpnTunnelConfig
 import com.duckduckgo.mobile.android.vpn.network.util.asRoute
+import com.duckduckgo.mobile.android.vpn.network.util.getActiveNetwork
 import com.duckduckgo.mobile.android.vpn.pixels.DeviceShieldPixels
 import com.duckduckgo.mobile.android.vpn.service.state.VpnStateMonitorService
 import com.duckduckgo.mobile.android.vpn.state.VpnStateMonitor.VpnStopReason
@@ -107,6 +109,9 @@ class TrackerBlockingVpnService : VpnService(), CoroutineScope by MainScope(), V
     @Inject
     lateinit var vpnEnabledNotificationContentPluginPoint: PluginPoint<VpnEnabledNotificationContentPlugin>
 
+    @Inject
+    lateinit var vpnFeaturesRegistry: VpnFeaturesRegistry
+
     private var activeTun by Delegates.observable<ParcelFileDescriptor?>(null) { _, oldTun, newTun ->
         fun ParcelFileDescriptor?.safeFd(): Int? {
             return runCatching { this?.fd }.getOrNull()
@@ -117,6 +122,21 @@ class TrackerBlockingVpnService : VpnService(), CoroutineScope by MainScope(), V
             oldTun?.close()
         }.onFailure {
             logcat(ERROR) { "VPN log: Error closing old tun ${oldTun?.safeFd()}" }
+        }
+    }
+
+    private var currentNetwork by Delegates.observable<String?>(null) { _, old, new ->
+        logcat { "Setting current network old = $old, new = $new" }
+
+        if (old == null) return@observable
+        if (new == null) return@observable
+
+        // Did the current default network changed? if so reconfigure
+        if (old != new) {
+            logcat(WARN) { "old network $old != $new new network...restart VPN" }
+            launch(serviceDispatcher) {
+                startVpn()
+            }
         }
     }
 
@@ -221,12 +241,28 @@ class TrackerBlockingVpnService : VpnService(), CoroutineScope by MainScope(), V
             }
             ACTION_STOP_VPN -> {
                 synchronized(this) {
+                    currentNetwork = null
                     launch(serviceDispatcher) { stopVpn(VpnStopReason.SELF_STOP) }
                 }
             }
             ACTION_RESTART_VPN -> {
                 synchronized(this) {
+                    currentNetwork = null
                     launch(serviceDispatcher) { startVpn() }
+                }
+            }
+            ACTION_RESTART_IF_DEFAULT_NETWORK_CHANGED -> {
+                synchronized(this) {
+                    launch(serviceDispatcher) {
+                        // when both AppTP and NetP are enabled, we don't need to reconfigure anything
+                        // NetP already has a DNS defined
+                        if (vpnFeaturesRegistry.getRegisteredFeatures().size > 1) return@launch
+
+                        // set the current default active network
+                        this@TrackerBlockingVpnService.getActiveNetwork()?.let {
+                            currentNetwork = it.toString()
+                        }
+                    }
                 }
             }
             else -> logcat(ERROR) { "Unknown intent action: $action" }
@@ -777,10 +813,28 @@ class TrackerBlockingVpnService : VpnService(), CoroutineScope by MainScope(), V
             }
         }
 
+        internal fun restartIfDefaultNetworkChanged(
+            context: Context,
+        ) {
+            fun intent(): Intent {
+                return serviceIntent(context).also {
+                    it.action = ACTION_RESTART_IF_DEFAULT_NETWORK_CHANGED
+                }
+            }
+
+            val applicationContext = context.applicationContext
+            if (isServiceRunning(applicationContext)) {
+                intent().run {
+                    ContextCompat.startForegroundService(applicationContext, this)
+                }
+            }
+        }
+
         private const val ACTION_START_VPN = "ACTION_START_VPN"
         private const val ACTION_STOP_VPN = "ACTION_STOP_VPN"
         private const val ACTION_RESTART_VPN = "ACTION_RESTART_VPN"
         private const val ACTION_ALWAYS_ON_START = "android.net.VpnService"
+        private const val ACTION_RESTART_IF_DEFAULT_NETWORK_CHANGED = "ACTION_RESTART_IF_DEFAULT_NETWORK_CHANGED"
     }
 
     private fun VpnNetworkStack.onCreateVpnWithErrorReporting() {
