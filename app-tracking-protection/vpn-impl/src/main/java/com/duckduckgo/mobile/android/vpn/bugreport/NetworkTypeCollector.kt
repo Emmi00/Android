@@ -20,8 +20,10 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.net.*
 import android.net.ConnectivityManager.NetworkCallback
+import android.os.Handler
 import android.os.SystemClock
 import androidx.core.content.edit
+import androidx.core.os.postDelayed
 import com.duckduckgo.app.di.AppCoroutineScope
 import com.duckduckgo.app.global.extensions.getPrivateDnsServerName
 import com.duckduckgo.app.global.extensions.isPrivateDnsActive
@@ -71,6 +73,9 @@ class NetworkTypeCollector @Inject constructor(
     private val isPrivateDnsSupportEnabled: Boolean
         get() = appTpFeatureConfig.isEnabled(AppTpSetting.PrivateDnsSupport)
 
+    private val isInterceptDnsRequestsEnabled: Boolean
+        get() = appTpFeatureConfig.isEnabled(AppTpSetting.InterceptDnsRequests)
+
     private val preferences: SharedPreferences
         get() = context.getHarmonySharedPreferences(FILENAME)
 
@@ -92,13 +97,21 @@ class NetworkTypeCollector @Inject constructor(
         override fun onAvailable(network: Network) {
             updateNetworkInfo(Connection(network.networkHandle, NetworkType.WIFI, NetworkState.AVAILABLE))
             logcat { "WIFI available" }
-            TrackerBlockingVpnService.restartIfDefaultNetworkChanged(context)
+            if (isInterceptDnsRequestsEnabled) {
+                // The WIFI available events triggers very quickly, and by then the default network configs haven't yet propagated
+                // give it some time before we notify the VPN service
+                Handler().postDelayed(4000) {
+                    TrackerBlockingVpnService.restartIfDefaultNetworkChanged(context)
+                }
+            }
         }
 
         override fun onLost(network: Network) {
             updateNetworkInfo(Connection(network.networkHandle, NetworkType.WIFI, NetworkState.LOST))
             logcat { "WIFI lost" }
-            TrackerBlockingVpnService.restartIfDefaultNetworkChanged(context)
+            if (isInterceptDnsRequestsEnabled) {
+                TrackerBlockingVpnService.restartIfDefaultNetworkChanged(context)
+            }
         }
     }
 
@@ -108,7 +121,9 @@ class NetworkTypeCollector @Inject constructor(
                 Connection(network.networkHandle, NetworkType.CELLULAR, NetworkState.AVAILABLE, context.mobileNetworkCode(NetworkType.CELLULAR)),
             )
             logcat { "CELL available" }
-            TrackerBlockingVpnService.restartIfDefaultNetworkChanged(context)
+            if (isInterceptDnsRequestsEnabled) {
+                TrackerBlockingVpnService.restartIfDefaultNetworkChanged(context)
+            }
         }
 
         override fun onLost(network: Network) {
@@ -116,7 +131,9 @@ class NetworkTypeCollector @Inject constructor(
                 Connection(network.networkHandle, NetworkType.CELLULAR, NetworkState.LOST, context.mobileNetworkCode(NetworkType.CELLULAR)),
             )
             logcat { "CELL lost" }
-            TrackerBlockingVpnService.restartIfDefaultNetworkChanged(context)
+            if (isInterceptDnsRequestsEnabled) {
+                TrackerBlockingVpnService.restartIfDefaultNetworkChanged(context)
+            }
         }
     }
 
